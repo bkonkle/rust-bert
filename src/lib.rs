@@ -725,6 +725,7 @@ pub mod roberta;
 pub mod t5;
 pub mod xlnet;
 
+pub use common::{dropout, embeddings};
 pub use common::error::RustBertError;
 pub use common::resources;
 pub use common::{Activation, Config};
