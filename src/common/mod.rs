@@ -1,7 +1,7 @@
 pub(crate) mod activations;
 pub mod config;
-pub(crate) mod dropout;
-pub(crate) mod embeddings;
+pub mod dropout;
+pub mod embeddings;
 pub mod error;
 pub(crate) mod kind;
 pub(crate) mod linear;
