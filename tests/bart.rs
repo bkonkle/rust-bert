@@ -2,6 +2,7 @@ use rust_bert::bart::{
     BartConfig, BartConfigResources, BartMergesResources, BartModel, BartModelResources,
     BartVocabResources,
 };
+use rust_bert::pipelines::common::ModelResource;
 use rust_bert::pipelines::summarization::{SummarizationConfig, SummarizationModel};
 use rust_bert::pipelines::zero_shot_classification::{
     ZeroShotClassificationConfig, ZeroShotClassificationModel,
@@ -59,7 +60,7 @@ fn bart_lm_model() -> anyhow::Result<()> {
             input.extend(vec![0; max_len - input.len()]);
             input
         })
-        .map(|input| Tensor::of_slice(&(input)))
+        .map(|input| Tensor::from_slice(&(input)))
         .collect::<Vec<_>>();
     let input_tensor = Tensor::stack(tokenized_input.as_slice(), 0).to(device);
 
@@ -90,7 +91,7 @@ fn bart_summarization_greedy() -> anyhow::Result<()> {
         BartModelResources::DISTILBART_CNN_6_6,
     ));
     let summarization_config = SummarizationConfig {
-        model_resource,
+        model_resource: ModelResource::Torch(model_resource),
         config_resource,
         vocab_resource,
         merges_resource: Some(merges_resource),
@@ -151,7 +152,7 @@ fn bart_summarization_beam_search() -> anyhow::Result<()> {
         BartModelResources::DISTILBART_CNN_6_6,
     ));
     let summarization_config = SummarizationConfig {
-        model_resource,
+        model_resource: ModelResource::Torch(model_resource),
         config_resource,
         vocab_resource,
         merges_resource: Some(merges_resource),

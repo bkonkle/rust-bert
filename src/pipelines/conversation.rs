@@ -55,7 +55,7 @@
 //! from the 3rd party utilization of the pretrained system.
 use crate::common::error::RustBertError;
 use crate::gpt2::GPT2Generator;
-use crate::pipelines::common::{ModelType, TokenizerOption};
+use crate::pipelines::common::{ModelResource, ModelType, TokenizerOption};
 use crate::pipelines::generation_utils::private_generation_utils::PrivateLanguageGenerator;
 use crate::pipelines::generation_utils::{GenerateConfig, LanguageGenerator};
 use crate::resources::ResourceProvider;
@@ -76,7 +76,7 @@ pub struct ConversationConfig {
     /// Model type
     pub model_type: ModelType,
     /// Model weights resource (default: DialoGPT-medium)
-    pub model_resource: Box<dyn ResourceProvider + Send>,
+    pub model_resource: ModelResource,
     /// Config resource (default: DialoGPT-medium)
     pub config_resource: Box<dyn ResourceProvider + Send>,
     /// Vocab resource (default: DialoGPT-medium)
@@ -122,9 +122,9 @@ impl Default for ConversationConfig {
     fn default() -> ConversationConfig {
         ConversationConfig {
             model_type: ModelType::GPT2,
-            model_resource: Box::new(RemoteResource::from_pretrained(
+            model_resource: ModelResource::Torch(Box::new(RemoteResource::from_pretrained(
                 Gpt2ModelResources::DIALOGPT_MEDIUM,
-            )),
+            ))),
             config_resource: Box::new(RemoteResource::from_pretrained(
                 Gpt2ConfigResources::DIALOGPT_MEDIUM,
             )),
@@ -157,6 +157,7 @@ impl Default for ConversationConfig {
 impl From<ConversationConfig> for GenerateConfig {
     fn from(config: ConversationConfig) -> GenerateConfig {
         GenerateConfig {
+            model_type: config.model_type,
             model_resource: config.model_resource,
             config_resource: config.config_resource,
             merges_resource: config.merges_resource,
@@ -708,6 +709,22 @@ impl ConversationOption {
         }
     }
 
+    pub fn new_with_tokenizer(
+        config: ConversationConfig,
+        tokenizer: TokenizerOption,
+    ) -> Result<Self, RustBertError> {
+        match config.model_type {
+            ModelType::GPT2 => Ok(ConversationOption::GPT2(GPT2Generator::new_with_tokenizer(
+                config.into(),
+                tokenizer,
+            )?)),
+            _ => Err(RustBertError::InvalidConfigurationError(
+                "GPT2 is currently the only supported model for conversation generation"
+                    .to_string(),
+            )),
+        }
+    }
+
     pub fn get_eos_id(&self) -> Result<i64, RustBertError> {
         match self {
             Self::GPT2(model_ref) => {
@@ -716,9 +733,17 @@ impl ConversationOption {
         }
     }
 
+    /// Get a reference to the model tokenizer.
     pub fn get_tokenizer(&self) -> &TokenizerOption {
         match self {
             Self::GPT2(model_ref) => model_ref._get_tokenizer(),
+        }
+    }
+
+    /// Get a mutable reference to the model tokenizer.
+    pub fn get_tokenizer_mut(&mut self) -> &TokenizerOption {
+        match self {
+            Self::GPT2(model_ref) => model_ref._get_tokenizer_mut(),
         }
     }
 
@@ -779,6 +804,49 @@ impl ConversationModel {
             .map(|max_length| max_length - conversation_config.min_length_for_response);
         let device = conversation_config.device;
         let model = ConversationOption::new(conversation_config)?;
+        let eos_token_id = model.get_eos_id()?;
+        Ok(ConversationModel {
+            model,
+            eos_token_id,
+            max_allowed_context_length: max_allowed_length,
+            device,
+        })
+    }
+
+    /// Build a new `ConversationModel` with a provided tokenizer.
+    ///
+    /// # Arguments
+    ///
+    /// * `conversation_config` - `ConversationConfig` object containing the resource references (model, vocabulary, configuration), conversation options and device placement (CPU/GPU)
+    /// * `tokenizer` - `TokenizerOption` tokenizer to use for conversation
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # fn main() -> anyhow::Result<()> {
+    /// use rust_bert::pipelines::common::{ModelType, TokenizerOption};
+    /// use rust_bert::pipelines::conversation::ConversationModel;
+    /// let tokenizer = TokenizerOption::from_file(
+    ///     ModelType::GPT2,
+    ///     "path/to/vocab.json",
+    ///     Some("path/to/merges.txt"),
+    ///     false,
+    ///     None,
+    ///     None,
+    /// )?;
+    /// let conversation_model = ConversationModel::new_with_tokenizer(Default::default(), tokenizer)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn new_with_tokenizer(
+        conversation_config: ConversationConfig,
+        tokenizer: TokenizerOption,
+    ) -> Result<ConversationModel, RustBertError> {
+        let max_allowed_length = conversation_config
+            .max_length
+            .map(|max_length| max_length - conversation_config.min_length_for_response);
+        let device = conversation_config.device;
+        let model = ConversationOption::new_with_tokenizer(conversation_config, tokenizer)?;
         let eos_token_id = model.get_eos_id()?;
         Ok(ConversationModel {
             model,
@@ -944,7 +1012,7 @@ impl ConversationModel {
             .unwrap();
 
         let attention_mask = Tensor::ones(
-            &[inputs.len() as i64, max_len as i64],
+            [inputs.len() as i64, max_len as i64],
             (Kind::Int8, self.device),
         );
 
@@ -960,7 +1028,7 @@ impl ConversationModel {
                 padded_input.extend(input);
                 padded_input
             })
-            .map(|tokens| Tensor::of_slice(&tokens).to(self.device))
+            .map(|tokens| Tensor::from_slice(&tokens).to(self.device))
             .collect::<Vec<Tensor>>();
 
         (Tensor::stack(&concatenated_inputs, 0), attention_mask)
