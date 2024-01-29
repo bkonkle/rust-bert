@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use tch::Device;
+use tch::{Device, Kind};
 
 use crate::common::error::RustBertError;
 use crate::m2m_100::M2M100Generator;
@@ -978,6 +978,8 @@ pub struct TranslationConfig {
     pub num_beam_groups: Option<i64>,
     /// Diversity penalty for diverse beam search. High values will enforce more difference between beam groups (default: 5.5)
     pub diversity_penalty: Option<f64>,
+    /// Model weights precision. If not provided, will default to full precision on CPU, or the loaded weights precision otherwise
+    pub kind: Option<Kind>,
 }
 
 impl TranslationConfig {
@@ -1065,6 +1067,7 @@ impl TranslationConfig {
             num_return_sequences: 1,
             num_beam_groups: None,
             diversity_penalty: None,
+            kind: None,
         }
     }
 }
@@ -1092,6 +1095,7 @@ impl From<TranslationConfig> for GenerateConfig {
             num_beam_groups: config.num_beam_groups,
             diversity_penalty: config.diversity_penalty,
             device: config.device,
+            kind: config.kind,
         }
     }
 }
@@ -1215,18 +1219,18 @@ impl TranslationOption {
         &self,
         prompt_texts: Option<&[S]>,
         forced_bos_token_id: Option<i64>,
-    ) -> Vec<String>
+    ) -> Result<Vec<String>, RustBertError>
     where
         S: AsRef<str> + Send + Sync,
     {
-        match *self {
+        Ok(match *self {
             Self::Marian(ref model) => model
-                .generate(prompt_texts, None)
+                .generate(prompt_texts, None)?
                 .into_iter()
                 .map(|output| output.text)
                 .collect(),
             Self::T5(ref model) => model
-                .generate(prompt_texts, None)
+                .generate(prompt_texts, None)?
                 .into_iter()
                 .map(|output| output.text)
                 .collect(),
@@ -1236,7 +1240,7 @@ impl TranslationOption {
                     ..Default::default()
                 };
                 model
-                    .generate(prompt_texts, Some(generate_options))
+                    .generate(prompt_texts, Some(generate_options))?
                     .into_iter()
                     .map(|output| output.text)
                     .collect()
@@ -1247,7 +1251,7 @@ impl TranslationOption {
                     ..Default::default()
                 };
                 model
-                    .generate(prompt_texts, Some(generate_options))
+                    .generate(prompt_texts, Some(generate_options))?
                     .into_iter()
                     .map(|output| output.text)
                     .collect()
@@ -1260,12 +1264,12 @@ impl TranslationOption {
                         ..Default::default()
                     });
                 model
-                    .generate(prompt_texts, generate_options)
+                    .generate(prompt_texts, generate_options)?
                     .into_iter()
                     .map(|output| output.text)
                     .collect()
             }
-        }
+        })
     }
 }
 
@@ -1480,7 +1484,7 @@ impl TranslationModel {
                 &self.supported_target_languages,
             )?;
 
-        Ok(match prefix {
+        match prefix {
             Some(value) => {
                 let texts = texts
                     .iter()
@@ -1489,7 +1493,7 @@ impl TranslationModel {
                 self.model.generate(Some(&texts), forced_bos_token_id)
             }
             None => self.model.generate(Some(texts), forced_bos_token_id),
-        })
+        }
     }
 }
 

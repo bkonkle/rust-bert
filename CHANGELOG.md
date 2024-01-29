@@ -2,14 +2,23 @@
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
+
+## [0.22.0] - 2024-01-20
 ## Added
 - Addition of `new_with_tokenizer` constructor for `SentenceEmbeddingsModel` allowing passing custom tokenizers for sentence embeddings pipelines.
 - Support for [Tokenizers](https://github.com/huggingface/tokenizers) in pipelines, allowing loading `tokenizer.json` and `special_token_map.json` tokenizer files. 
+- (BREAKING) Most model configuration can now take an optional `kind` parameter to specify the model weight precision. If not provided, will default to full precision on CPU, or the serialized weights precision otherwise.
 
 ## Fixed
 - (BREAKING) Fixed the keyword extraction pipeline for n-gram sizes > 2. Add new configuration option `tokenizer_forbidden_ngram_chars` to specify characters that should be excluded from n-grams (allows filtering m-grams spanning multiple sentences).
 - Improved MPS device compatibility setting the `sparse_grad` flag to false for `gather` operations
 - Updated ONNX runtime backend version to 1.15.x
+- Issue with incorrect results for QA models with a tokenizer not using segment ids
+- Issue with GPT-J that was incorrectly tracking the gradients for the attention bias
+
+## Changed
+- (BREAKING) Upgraded to `torch` 2.1 (via `tch` 0.14.0).
+- (BREAKING) Text generation traits and pipelines (including conversation, summarization and translation) now return a `Result` for improved error handling
 
 ## [0.21.0] - 2023-06-03
 ## Added

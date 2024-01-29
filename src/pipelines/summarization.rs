@@ -62,7 +62,7 @@
 //! # ;
 //! ```
 
-use tch::Device;
+use tch::{Device, Kind};
 
 use crate::bart::BartGenerator;
 use crate::common::error::RustBertError;
@@ -126,6 +126,8 @@ pub struct SummarizationConfig {
     pub diversity_penalty: Option<f64>,
     /// Device to place the model on (default: CUDA/GPU when available)
     pub device: Device,
+    /// Model weights precision. If not provided, will default to full precision on CPU, or the loaded weights precision otherwise
+    pub kind: Option<Kind>,
 }
 
 impl SummarizationConfig {
@@ -170,6 +172,7 @@ impl SummarizationConfig {
             num_beam_groups: None,
             diversity_penalty: None,
             device: Device::cuda_if_available(),
+            kind: None,
         }
     }
 }
@@ -214,6 +217,7 @@ impl From<SummarizationConfig> for GenerateConfig {
             num_beam_groups: config.num_beam_groups,
             diversity_penalty: config.diversity_penalty,
             device: config.device,
+            kind: config.kind,
         }
     }
 }
@@ -334,43 +338,43 @@ impl SummarizationOption {
     }
 
     /// Interface method to generate() of the particular models.
-    pub fn generate<S>(&self, prompt_texts: Option<&[S]>) -> Vec<String>
+    pub fn generate<S>(&self, prompt_texts: Option<&[S]>) -> Result<Vec<String>, RustBertError>
     where
         S: AsRef<str> + Send + Sync,
     {
-        match *self {
+        Ok(match *self {
             Self::Bart(ref model) => model
-                .generate(prompt_texts, None)
+                .generate(prompt_texts, None)?
                 .into_iter()
                 .map(|output| output.text)
                 .collect(),
             Self::T5(ref model) => model
-                .generate(prompt_texts, None)
+                .generate(prompt_texts, None)?
                 .into_iter()
                 .map(|output| output.text)
                 .collect(),
             Self::LongT5(ref model) => model
-                .generate(prompt_texts, None)
+                .generate(prompt_texts, None)?
                 .into_iter()
                 .map(|output| output.text)
                 .collect(),
             Self::ProphetNet(ref model) => model
-                .generate(prompt_texts, None)
+                .generate(prompt_texts, None)?
                 .into_iter()
                 .map(|output| output.text)
                 .collect(),
             Self::Pegasus(ref model) => model
-                .generate(prompt_texts, None)
+                .generate(prompt_texts, None)?
                 .into_iter()
                 .map(|output| output.text)
                 .collect(),
             #[cfg(feature = "onnx")]
             Self::ONNX(ref model) => model
-                .generate(prompt_texts, None)
+                .generate(prompt_texts, None)?
                 .into_iter()
                 .map(|output| output.text)
                 .collect(),
-        }
+        })
     }
 }
 
@@ -502,7 +506,7 @@ impl SummarizationModel {
     /// # }
     /// ```
     /// (New sample credits: [WikiNews](https://en.wikinews.org/wiki/Astronomers_find_water_vapour_in_atmosphere_of_exoplanet_K2-18b))
-    pub fn summarize<S>(&self, texts: &[S]) -> Vec<String>
+    pub fn summarize<S>(&self, texts: &[S]) -> Result<Vec<String>, RustBertError>
     where
         S: AsRef<str> + Send + Sync,
     {

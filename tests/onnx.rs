@@ -222,7 +222,7 @@ mod tests {
             ..Default::default()
         })?;
         let prompts = ["It was a very nice and sunny"];
-        let output = text_generation_model.generate(&prompts, None);
+        let output = text_generation_model.generate(&prompts, None)?;
         assert_eq!(output.len(), 1);
         assert_eq!(output[0], "It was a very nice and sunny day. I was very happy with the weather. I was very happy with the weather. I was very happy with");
         Ok(())
@@ -234,15 +234,15 @@ mod tests {
             ModelType::M2M100,
             ModelResource::ONNX(ONNXModelResources {
                 encoder_resource: Some(Box::new(RemoteResource::new(
-                    "https://huggingface.co/optimum/m2m100_418M/resolve/main/encoder_model.onnx",
+                    "https://huggingface.co/optimum/m2m100_418M/resolve/e775f50e63b178d82b8d736fc43fcf5ef15d2f6c/encoder_model.onnx",
                     "onnx-m2m100_418M",
                 ))),
                 decoder_resource: Some(Box::new(RemoteResource::new(
-                    "https://huggingface.co/optimum/m2m100_418M/resolve/main/decoder_model.onnx",
+                    "https://huggingface.co/optimum/m2m100_418M/resolve/e775f50e63b178d82b8d736fc43fcf5ef15d2f6c/decoder_model.onnx",
                     "onnx-m2m100_418M",
                 ))),
                 decoder_with_past_resource: Some(Box::new(RemoteResource::new(
-                    "https://huggingface.co/optimum/m2m100_418M/resolve/main/decoder_with_past_model.onnx",
+                    "https://huggingface.co/optimum/m2m100_418M/resolve/e775f50e63b178d82b8d736fc43fcf5ef15d2f6c/decoder_with_past_model.onnx",
                     "onnx-m2m100_418M",
                 ))),
             }),

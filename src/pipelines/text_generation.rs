@@ -31,7 +31,7 @@
 //!
 //! Customized text generation models models can be loaded by overwriting the resources in the configuration.
 //! The dependencies will be downloaded to the user's home directory, e.g. under ~/.cache/.rustbert/gpt2
-use tch::Device;
+use tch::{Device, Kind};
 
 use crate::common::error::RustBertError;
 use crate::gpt2::GPT2Generator;
@@ -97,6 +97,8 @@ pub struct TextGenerationConfig {
     pub diversity_penalty: Option<f64>,
     /// Device to place the model on (default: CUDA/GPU when available)
     pub device: Device,
+    /// Model weights precision. If not provided, will default to full precision on CPU, or the loaded weights precision otherwise
+    pub kind: Option<Kind>,
 }
 
 impl TextGenerationConfig {
@@ -141,6 +143,7 @@ impl TextGenerationConfig {
             num_beam_groups: None,
             diversity_penalty: None,
             device: Device::cuda_if_available(),
+            kind: None,
         }
     }
 }
@@ -185,6 +188,7 @@ impl From<TextGenerationConfig> for GenerateConfig {
             num_beam_groups: config.num_beam_groups,
             diversity_penalty: config.diversity_penalty,
             device: config.device,
+            kind: config.kind,
         }
     }
 }
@@ -331,7 +335,7 @@ impl TextGenerationOption {
         prompt_texts: Option<&[S]>,
         min_length: Option<i64>,
         max_length: Option<i64>,
-    ) -> Vec<Vec<i64>>
+    ) -> Result<Vec<Vec<i64>>, RustBertError>
     where
         S: AsRef<str> + Send + Sync,
     {
@@ -340,49 +344,49 @@ impl TextGenerationOption {
             max_length,
             ..Default::default()
         });
-        match *self {
+        Ok(match *self {
             Self::GPT(ref model) => model
-                .generate_indices(prompt_texts, generate_options)
+                .generate_indices(prompt_texts, generate_options)?
                 .into_iter()
                 .map(|output| output.indices)
                 .collect(),
             Self::GPT2(ref model) => model
-                .generate_indices(prompt_texts, generate_options)
+                .generate_indices(prompt_texts, generate_options)?
                 .into_iter()
                 .map(|output| output.indices)
                 .collect(),
             Self::GPTNeo(ref model) => model
-                .generate_indices(prompt_texts, generate_options)
+                .generate_indices(prompt_texts, generate_options)?
                 .into_iter()
                 .map(|output| output.indices)
                 .collect(),
             Self::GPTJ(ref model) => model
-                .generate_indices(prompt_texts, generate_options)
+                .generate_indices(prompt_texts, generate_options)?
                 .into_iter()
                 .map(|output| output.indices)
                 .collect(),
             Self::XLNet(ref model) => model
-                .generate_indices(prompt_texts, generate_options)
+                .generate_indices(prompt_texts, generate_options)?
                 .into_iter()
                 .map(|output| output.indices)
                 .collect(),
             Self::Reformer(ref model) => model
-                .generate_indices(prompt_texts, generate_options)
+                .generate_indices(prompt_texts, generate_options)?
                 .into_iter()
                 .map(|output| output.indices)
                 .collect(),
             Self::T5(ref model) => model
-                .generate_indices(prompt_texts, generate_options)
+                .generate_indices(prompt_texts, generate_options)?
                 .into_iter()
                 .map(|output| output.indices)
                 .collect(),
             #[cfg(feature = "onnx")]
             Self::ONNX(ref model) => model
-                .generate_indices(prompt_texts, generate_options)
+                .generate_indices(prompt_texts, generate_options)?
                 .into_iter()
                 .map(|output| output.indices)
                 .collect(),
-        }
+        })
     }
 
     pub fn half(&mut self) -> Result<(), RustBertError> {
@@ -595,7 +599,11 @@ with people, even a bishop, begging for his blessing. <eod> </s> <eos>"
     /// # Ok(())
     /// # }
     /// ```
-    pub fn generate<'a, S>(&self, texts: &[S], prefix: impl Into<Option<&'a str>>) -> Vec<String>
+    pub fn generate<'a, S>(
+        &self,
+        texts: &[S],
+        prefix: impl Into<Option<&'a str>>,
+    ) -> Result<Vec<String>, RustBertError>
     where
         S: AsRef<str> + Send + Sync,
     {
@@ -621,8 +629,10 @@ with people, even a bishop, begging for his blessing. <eod> </s> <eos>"
                     self.max_length.map(|max_length| max_length + prefix_length),
                 )
             }
-            _ => panic!("Prefix length not defined but prefix provided!"),
-        };
+            _ => Err(RustBertError::ValueError(
+                "Prefix length not defined but prefix provided!".to_string(),
+            )),
+        }?;
 
         let mut output = Vec::with_capacity(generated_indices.len());
         for generated_sequence in generated_indices {
@@ -632,7 +642,7 @@ with people, even a bishop, begging for his blessing. <eod> </s> <eos>"
                 true,
             ));
         }
-        output
+        Ok(output)
     }
 }
 
